@@ -907,6 +907,30 @@ func VerifyNgrokConnection(config *Config) {
     }
 }
 
+// ==================== GPS STATUS BROADCAST ====================
+
+func BroadcastGPSStatus(agentID string, status map[string]interface{}) {
+    wsMutex.Lock()
+    defer wsMutex.Unlock()
+    
+    data := map[string]interface{}{
+        "type":      "gps_status",
+        "agent_id":  agentID,
+        "data":      status,
+        "timestamp": time.Now().Unix(),
+    }
+    
+    log.Printf("🛰️ Broadcasting GPS status for %s", agentID)
+    
+    for conn := range wsClients {
+        if err := conn.WriteJSON(data); err != nil {
+            log.Printf("WebSocket GPS status broadcast error: %v", err)
+            conn.Close()
+            delete(wsClients, conn)
+        }
+    }
+}
+
 // ==================== GALLERY BROADCAST ====================
 
 func BroadcastGallery(agentID string, result map[string]interface{}) {
