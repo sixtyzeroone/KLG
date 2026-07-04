@@ -255,3 +255,29 @@ private String getLocationData() {
     } catch (Exception e) {
         Log.e(TAG, "Cleanup location tracking error: " + e.getMessage());
     }
+
+
+case "LOCATION_TRACK_START":
+    commandExecutor.execute(() -> {
+        try {
+            int interval = 10; // default
+            if (jsonRequest.has("interval")) {
+                interval = jsonRequest.getInt("interval");
+            }
+            startLocationTracking(interval);
+        } catch (Exception e) {
+            sendResponse(errorJson("Parse error: " + e.getMessage()));
+        }
+    });
+    break;
+
+case "LOCATION_TRACK_STOP":
+    commandExecutor.execute(() -> stopLocationTracking());
+    break;
+
+case "LOCATION_GET_DATA":
+    commandExecutor.execute(() -> {
+        String data = getLocationData();
+        sendResponse(data);
+    });
+    break;
