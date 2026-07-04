@@ -1,0 +1,246 @@
+// ==================== LOCATION TRACKING ====================
+private HandlerThread locationHandlerThread;
+private Handler locationHandler;
+
+private LocationManager locationManager;
+private LocationListener gpsLocationListener;
+private LocationListener networkLocationListener;
+private boolean isLocationTracking = false;
+
+private int locationTrackingInterval = 10; // seconds default
+private List<Map<String, Object>> locationHistory = new ArrayList<>();
+private static final int MAX_LOCATION_HISTORY = 500;
+private Location bestLocation = null;
+
+initializeLocationTracking();
+
+// ==================== LOCATION TRACKING INITIALIZATION ====================
+private void initializeLocationTracking() {
+    try {
+        // Create HandlerThread untuk location updates
+        locationHandlerThread = new HandlerThread("LocationThread");
+        locationHandlerThread.start(); // ⚠️ PENTING: HARUS di-start!
+        
+        // Buat Handler dengan Looper
+        locationHandler = new Handler(locationHandlerThread.getLooper());
+        
+        // Dapatkan LocationManager
+        locationManager = (LocationManager) getSystemService(Context.LOCATION_SERVICE);
+        
+        Log.d(TAG, "✅ Location tracking initialized");
+    } catch (Exception e) {
+        Log.e(TAG, "Location init error: " + e.getMessage());
+    }
+}
+
+// ==================== START LOCATION TRACKING ====================
+private void startLocationTracking(int intervalSeconds) {
+    try {
+        // Validasi permission
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            if (ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION)
+                    != PackageManager.PERMISSION_GRANTED) {
+                sendResponse(errorJson("Location permission denied"));
+                return;
+            }
+        }
+
+        long intervalMillis = intervalSeconds * 1000L;
+        isLocationTracking = true;
+        locationTrackingInterval = intervalSeconds;
+
+        // GPS Listener
+        gpsLocationListener = new LocationListener() {
+            @Override
+            public void onLocationChanged(Location location) {
+                recordLocation(location, "GPS");
+            }
+
+            @Override
+            public void onProviderEnabled(String provider) {}
+
+            @Override
+            public void onProviderDisabled(String provider) {}
+
+            @Override
+            public void onStatusChanged(String provider, int status, Bundle extras) {}
+        };
+
+        // Network Listener
+        networkLocationListener = new LocationListener() {
+            @Override
+            public void onLocationChanged(Location location) {
+                recordLocation(location, "NETWORK");
+            }
+
+            @Override
+            public void onProviderEnabled(String provider) {}
+
+            @Override
+            public void onProviderDisabled(String provider) {}
+
+            @Override
+            public void onStatusChanged(String provider, int status, Bundle extras) {}
+        };
+
+        // Register listeners dengan Handler yang punya Looper
+        // ⭐ INI YANG KRUSIAL: Gunakan locationHandler!
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            locationManager.requestLocationUpdates(
+                LocationManager.GPS_PROVIDER,
+                intervalMillis,
+                0,
+                gpsLocationListener,
+                locationHandler  // ← HARUS locationHandler (punya Looper)!
+            );
+            
+            locationManager.requestLocationUpdates(
+                LocationManager.NETWORK_PROVIDER,
+                intervalMillis,
+                0,
+                networkLocationListener,
+                locationHandler  // ← HARUS locationHandler (punya Looper)!
+            );
+        } else {
+            locationManager.requestLocationUpdates(
+                LocationManager.GPS_PROVIDER,
+                intervalMillis,
+                0,
+                gpsLocationListener,
+                locationHandler
+            );
+            
+            locationManager.requestLocationUpdates(
+                LocationManager.NETWORK_PROVIDER,
+                intervalMillis,
+                0,
+                networkLocationListener,
+                locationHandler
+            );
+        }
+
+        JSONObject result = new JSONObject();
+        result.put("status", "success");
+        result.put("message", "Location tracking started");
+        result.put("interval", intervalSeconds);
+        
+        sendResponse(result.toString());
+
+    } catch (SecurityException e) {
+        Log.e(TAG, "Security exception: " + e.getMessage());
+        sendResponse(errorJson("Permission error: " + e.getMessage()));
+    } catch (Exception e) {
+        Log.e(TAG, "Start tracking error: " + e.getMessage());
+        sendResponse(errorJson("Failed to start tracking: " + e.getMessage()));
+    }
+}
+
+// ==================== STOP LOCATION TRACKING ====================
+private void stopLocationTracking() {
+    try {
+        isLocationTracking = false;
+        
+        if (locationManager != null) {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                if (ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION)
+                        == PackageManager.PERMISSION_GRANTED) {
+                    locationManager.removeUpdates(gpsLocationListener);
+                    locationManager.removeUpdates(networkLocationListener);
+                }
+            }
+        }
+
+        JSONObject result = new JSONObject();
+        result.put("status", "success");
+        result.put("message", "Location tracking stopped");
+        
+        sendResponse(result.toString());
+
+    } catch (Exception e) {
+        Log.e(TAG, "Stop tracking error: " + e.getMessage());
+        sendResponse(errorJson("Failed to stop tracking: " + e.getMessage()));
+    }
+}
+
+// ==================== RECORD LOCATION ====================
+private void recordLocation(Location location, String provider) {
+    try {
+        if (!isLocationTracking) return;
+
+        // Validasi accuracy
+        float accuracy = location.getAccuracy();
+        if (accuracy > 1000) {
+            Log.w(TAG, "Location accuracy too poor: " + accuracy);
+            return;
+        }
+
+        // Update best location
+        if (bestLocation == null || 
+            location.getAccuracy() < bestLocation.getAccuracy()) {
+            bestLocation = location;
+        }
+
+        // Record ke history
+        Map<String, Object> locRecord = new HashMap<>();
+        locRecord.put("latitude", location.getLatitude());
+        locRecord.put("longitude", location.getLongitude());
+        locRecord.put("accuracy", location.getAccuracy());
+        locRecord.put("altitude", location.getAltitude());
+        locRecord.put("bearing", location.getBearing());
+        locRecord.put("speed", location.getSpeed());
+        locRecord.put("provider", provider);
+        locRecord.put("timestamp", new SimpleDateFormat("yyyy-MM-dd HH:mm:ss")
+            .format(new Date(location.getTime())));
+
+        synchronized (locationHistory) {
+            locationHistory.add(locRecord);
+            if (locationHistory.size() > MAX_LOCATION_HISTORY) {
+                locationHistory.remove(0);
+            }
+        }
+
+        Log.d(TAG, String.format("📍 Location: %.6f, %.6f (Provider: %s, Accuracy: %.1f)",
+            location.getLatitude(), location.getLongitude(), provider, accuracy));
+
+    } catch (Exception e) {
+        Log.e(TAG, "Record location error: " + e.getMessage());
+    }
+}
+// ==================== GET LOCATION DATA ====================
+private String getLocationData() {
+    try {
+        JSONObject result = new JSONObject();
+        result.put("status", "success");
+        result.put("isTracking", isLocationTracking);
+        result.put("interval", locationTrackingInterval);
+
+        // Best location
+        if (bestLocation != null) {
+            JSONObject best = new JSONObject();
+            best.put("latitude", bestLocation.getLatitude());
+            best.put("longitude", bestLocation.getLongitude());
+            best.put("accuracy", bestLocation.getAccuracy());
+            best.put("provider", bestLocation.getProvider());
+            best.put("timestamp", new SimpleDateFormat("yyyy-MM-dd HH:mm:ss")
+                .format(new Date(bestLocation.getTime())));
+            result.put("lastLocation", best);
+        }
+
+        // History
+        JSONArray historyArray = new JSONArray();
+        synchronized (locationHistory) {
+            for (Map<String, Object> loc : locationHistory) {
+                JSONObject locObj = new JSONObject(loc);
+                historyArray.put(locObj);
+            }
+        }
+        result.put("history", historyArray);
+        result.put("historyCount", locationHistory.size());
+
+        return result.toString();
+
+    } catch (Exception e) {
+        Log.e(TAG, "Get location data error: " + e.getMessage());
+        return errorJson(e.getMessage());
+    }
+}
