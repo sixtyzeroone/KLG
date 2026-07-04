@@ -244,3 +244,14 @@ private String getLocationData() {
         return errorJson(e.getMessage());
     }
 }
+// ⭐ TAMBAHKAN INI:
+    try {
+        stopLocationTracking();
+        
+        if (locationHandlerThread != null) {
+            locationHandlerThread.quit();
+            locationHandlerThread = null;
+        }
+    } catch (Exception e) {
+        Log.e(TAG, "Cleanup location tracking error: " + e.getMessage());
+    }
