@@ -1348,3 +1348,10 @@ func (h *WebHandler) handleAgentPage(w http.ResponseWriter, r *http.Request) {
     }
     http.ServeFile(w, r, "./web/templates/agent.html")
 }
+ Status: error
+[4:42:16 AM] 💬 Message: Failed to start tracking: Can't create handler inside thread Thread[pool-2-thread-1,5,main] that has not called Looper.prepare()
+[4:43:30 AM]📤 Sending: LOCATION_TRACK_START to 3519991586e1db49
+[4:43:30 AM]📤 Command sent to 3519991586e1db49: LOCATION_TRACK_START
+[4:43:31 AM][4:43:31 AM] 📥 Response from 3519991586e1db49 for LOCATION_TRACK_START: { "message": "Failed to start tracking: Can't create handler inside thread Thread[pool-2-thread-3,5,main] that has not called Looper.prepare()", "status": "error" }
+[4:43:31 AM] 📊 Status: error
+[4:43:31 AM] 💬 Message: Failed to start tracking: Can't create handler inside thread Thread[pool-2-thread-3,5,main] that has not called Looper.prepare()
