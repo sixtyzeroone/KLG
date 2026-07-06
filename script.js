@@ -2159,6 +2159,17 @@ function getPlatformColor(platform) {
         case 'messenger': return '#00B2FF';
         case 'line': return '#00C300';
         case 'discord': return '#5865F2';
+        case 'tiktok': return '#000000';
+        case 'lemo': return '#FFD700';
+        case 'litmatch': return '#FF6B35';
+        case 'michat': return '#9B59B6';
+        case 'wechat': return '#07C160';
+        case 'kakao': return '#FEE500';
+        case 'viber': return '#7B519D';
+        case 'hangouts': return '#0F9D58';
+        case 'groupme': return '#00AFF0';
+        case 'slack': return '#4A154B';
+        case 'teams': return '#464EB8';
         default: return '#6b7a8a';
     }
 }
@@ -2173,6 +2184,17 @@ function getPlatformIcon(platform) {
         case 'messenger': return '💙';
         case 'line': return '💚';
         case 'discord': return '🎮';
+        case 'tiktok': return '🎵';
+        case 'lemo': return '💛';
+        case 'litmatch': return '🔥';
+        case 'michat': return '💜';
+        case 'wechat': return '🟢';
+        case 'kakao': return '🟡';
+        case 'viber': return '🟣';
+        case 'hangouts': return '💚';
+        case 'groupme': return '🔵';
+        case 'slack': return '💜';
+        case 'teams': return '🟣';
         default: return '📱';
     }
 }
