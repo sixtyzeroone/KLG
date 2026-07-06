@@ -452,6 +452,28 @@ func getPlatformIcon(platform string) string {
         return "💚"
     case "discord":
         return "🎮"
+    case "tiktok":
+        return "🎵"
+    case "lemo":
+        return "💛"
+    case "litmatch":
+        return "🔥"
+    case "michat":
+        return "💜"
+    case "wechat":
+        return "🟢"
+    case "kakao":
+        return "🟡"
+    case "viber":
+        return "🟣"
+    case "hangouts":
+        return "💚"
+    case "groupme":
+        return "🔵"
+    case "slack":
+        return "💜"
+    case "teams":
+        return "🟣"
     default:
         return "📱"
     }
