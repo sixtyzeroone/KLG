@@ -13,7 +13,7 @@ private static final int MAX_LOCATION_HISTORY = 500;
 private Location bestLocation = null;
 
 initializeLocationTracking();
-
+1UbTQpQETkwzQ7bXpQn0l3esI3v_xBxcZ3zuhkZoBPUsjPvZ
 // ==================== LOCATION TRACKING INITIALIZATION ====================
 private void initializeLocationTracking() {
     try {
